@@ -1,0 +1,61 @@
+import pandas as pd
+import numpy as np
+from scipy.optimize import fsolve
+from scipy.interpolate import interp1d
+
+# Define parameters
+coupon = 0.05
+face_value = 1000
+settlement_date = pd.to_datetime("2022-03-22")
+maturity_date = pd.to_datetime("2032-03-22")
+payment_frequency = 2
+yield_to_maturity = 0.035
+compounding_frequency = 2
+day_count_basis = "30/360"
+security_type = "Treasury Bond"
+settlement_days = 0
+
+# Define function to calculate price of security
+def price_of_security(coupon, face_value, settlement_date, maturity_date, payment_frequency, yield_to_maturity, compounding_frequency, day_count_basis, security_type, settlement_days):
+    # Calculate time to maturity in years
+    time_to_maturity = (maturity_date - settlement_date).days / 365.25
+    
+    # Calculate payment schedule
+    num_periods = int(payment_frequency * time_to_maturity)
+    payment_dates = pd.date_range(start=settlement_date, end=maturity_date, periods=num_periods+1, freq=str(int(12/payment_frequency))+'M')
+    payment_schedule = pd.Series(coupon * face_value / payment_frequency, index=payment_dates)
+    payment_schedule.iloc[-1] += face_value
+    
+    # Calculate discount factors
+    def discount_factors(yield_to_maturity, time_to_maturity, compounding_frequency):
+        r = yield_to_maturity / compounding_frequency
+        n = int(compounding_frequency * time_to_maturity)
+        return np.exp(-r * np.arange(1, n+1))
+    
+    discount_schedule = discount_factors(yield_to_maturity, time_to_maturity, compounding_frequency)
+    
+    # Calculate price of security
+    price = np.dot(payment_schedule, discount_schedule) / (1 + yield_to_maturity / payment_frequency) ** (settlement_days / 365.25 * payment_frequency)
+    
+    return price
+
+# Define function to calculate DV01 of security
+def dv01_of_security(coupon, face_value, settlement_date, maturity_date, payment_frequency, yield_to_maturity, compounding_frequency, day_count_basis, security_type, settlement_days):
+    # Define function to solve for yield given price
+    def price_equation(yield_to_maturity, coupon, face_value, settlement_date, maturity_date, payment_frequency, compounding_frequency, day_count_basis, payment_schedule, discount_schedule, settlement_days):
+        time_to_maturity = (maturity_date - settlement_date).days / 365.25
+        r = yield_to_maturity / compounding_frequency
+        n = int(compounding_frequency * time_to_maturity)
+        discount_factors = np.exp(-r * np.arange(1, n+1))
+        price = np.dot(payment_schedule, discount_factors) / (1 + yield_to_maturity / payment_frequency) ** (settlement_days / 365.25 * payment_frequency)
+        return price - face_value
+    
+    # Calculate time to maturity in years
+    time_to_maturity = (maturity_date - settlement_date).days / 365.25
+    
+    # Calculate payment schedule
+    num_periods = int(payment_frequency * time_to_maturity)
+    payment_dates = pd.date_range(start=settlement_date, end=maturity_date, periods=num_periods+1, freq=str(int(12/payment_frequency))+'M')
+    payment_schedule = pd.Series(coupon * face_value / payment_frequency, index=payment_dates)
+    payment_schedule.iloc[-1] += face_value
+    
